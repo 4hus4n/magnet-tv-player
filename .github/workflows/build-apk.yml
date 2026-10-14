@@ -38,14 +38,27 @@ jobs:
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk MagnetPlayer.apk
-          VER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          set -o pipefail
+          APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          echo "APK: $APK"
+          cp "$APK" MagnetPlayer.apk
+          VER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -1)
           TAG="v$VER"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" MagnetPlayer.apk --clobber
-          else
-            gh release create "$TAG" MagnetPlayer.apk --title "Magnet Player $VER" \
-              --notes "Magnet Player for Android TV, version $VER. Download MagnetPlayer.apk below and install it on your TV." \
-              --latest
+          echo "Tag: $TAG"
+          publish() {
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              gh release upload "$TAG" MagnetPlayer.apk --clobber
+            else
+              gh release create "$TAG" MagnetPlayer.apk --title "Magnet Player $VER" \
+                --notes "Magnet Player for Android TV, version $VER. Download MagnetPlayer.apk below and install it on your TV." \
+                --latest --target "$GITHUB_SHA"
+            fi
+          }
+          if ! OUT=$(publish 2>&1); then
+            echo "$OUT"
+            echo "::error title=Publish failed::$(echo "$OUT" | tr '\n' ' ' | cut -c1-900)"
+            exit 1
           fi
+          echo "$OUT"

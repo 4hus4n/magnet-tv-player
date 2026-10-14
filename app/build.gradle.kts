@@ -11,8 +11,30 @@ android {
         applicationId = "mv.magnettv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // Sign the old (v1) and new (v2) way: some TV-box firmwares reject v2-only APKs.
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
+
+    defaultConfig {
+        ndk {
+            // Real TVs and boxes are ARM; dropping the emulator-only x86 libraries halves the APK.
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // Compress native libraries (classic packaging): smaller APK, and some older firmwares need it.
+            useLegacyPackaging = true
+        }
     }
 
     buildTypes {
@@ -42,8 +64,6 @@ dependencies {
     implementation("org.libtorrent4j:libtorrent4j:$lt")
     implementation("org.libtorrent4j:libtorrent4j-android-arm:$lt")
     implementation("org.libtorrent4j:libtorrent4j-android-arm64:$lt")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86:$lt")
-    implementation("org.libtorrent4j:libtorrent4j-android-x86_64:$lt")
 
     val media3 = "1.4.1"
     implementation("androidx.media3:media3-exoplayer:$media3")

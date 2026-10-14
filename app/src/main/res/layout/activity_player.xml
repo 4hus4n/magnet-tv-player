@@ -11,6 +11,7 @@
         android:layout_height="match_parent"
         android:focusable="true"
         app:show_shuffle_button="false"
+        app:surface_type="texture_view"
         app:show_subtitle_button="true" />
 
     <TextView

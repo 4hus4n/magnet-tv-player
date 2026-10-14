@@ -18,7 +18,7 @@ class LinkServer(port: Int, private val onMagnet: (String) -> Unit) : NanoHTTPD(
                 }
                 PageScraper.isPageUrl(raw) -> {
                     onMagnet(raw)
-                    page("<h2>✓ Sent to TV</h2><p>The TV is looking for the magnet link on that page. If there are several, pick one on the TV.</p><a href='/'>Send another</a>")
+                    page("<h2>✓ Sent to TV</h2><p>The TV is opening that link. If the page has several videos, pick one on the TV.</p><a href='/'>Send another</a>")
                 }
                 else -> page("<h2>That's not a magnet link or web address</h2><a href='/'>Try again</a>")
             }
@@ -27,7 +27,7 @@ class LinkServer(port: Int, private val onMagnet: (String) -> Unit) : NanoHTTPD(
             """
             <h2>Magnet Player</h2>
             <form method='post'>
-              <textarea name='magnet' placeholder='Paste a magnet link, or the web page that has one' autofocus></textarea>
+              <textarea name='magnet' placeholder='Paste a magnet link, a video link, or a web page that has one' autofocus></textarea>
               <button type='submit'>Play on TV</button>
             </form>
             """

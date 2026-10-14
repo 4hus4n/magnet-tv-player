@@ -3,109 +3,148 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0F1115"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:paddingStart="80dp"
-    android:paddingEnd="80dp">
+    android:paddingTop="28dp"
+    android:paddingEnd="80dp"
+    android:paddingBottom="20dp">
 
-    <!-- Left: manual entry -->
     <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
         android:layout_weight="1"
-        android:orientation="vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Magnet Player"
-            android:textColor="#FFFFFF"
-            android:textSize="34sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Paste a magnet link, or a web page that has one"
-            android:textColor="#9AA3AF"
-            android:textSize="16sp" />
-
-        <EditText
-            android:id="@+id/magnet_input"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:background="@drawable/input_bg"
-            android:hint="magnet:?xt=urn:btih:…  or  https://…"
-            android:imeOptions="actionGo"
-            android:inputType="textUri|textMultiLine"
-            android:maxLines="3"
-            android:minHeight="72dp"
-            android:padding="16dp"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#5B6370"
-            android:textSize="16sp" />
-
+        <!-- Left: manual entry -->
         <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Magnet Player"
+                android:textColor="#FFFFFF"
+                android:textSize="32sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Paste a magnet link, a video link, or a web page that has one"
+                android:textColor="#9AA3AF"
+                android:textSize="15sp" />
+
+            <EditText
+                android:id="@+id/magnet_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/input_bg"
+                android:hint="magnet:?xt=urn:btih:…  or  https://…"
+                android:imeOptions="actionGo"
+                android:inputType="textUri|textMultiLine"
+                android:maxLines="3"
+                android:minHeight="64dp"
+                android:padding="14dp"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#5B6370"
+                android:textSize="15sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_play"
+                    style="@style/TvButton"
+                    android:text="▶  Play" />
+
+                <Button
+                    android:id="@+id/btn_paste"
+                    style="@style/TvButton"
+                    android:layout_marginStart="16dp"
+                    android:text="Paste" />
+
+                <Button
+                    android:id="@+id/btn_clear"
+                    style="@style/TvButton"
+                    android:layout_marginStart="16dp"
+                    android:text="Clear" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Right: scan with phone -->
+        <LinearLayout
+            android:id="@+id/qr_box"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:orientation="horizontal">
+            android:layout_marginStart="48dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
 
-            <Button
-                android:id="@+id/btn_play"
-                style="@style/TvButton"
-                android:text="▶  Play" />
+            <ImageView
+                android:id="@+id/qr_image"
+                android:layout_width="170dp"
+                android:layout_height="170dp"
+                android:background="#FFFFFF"
+                android:contentDescription="QR code to send a link from your phone"
+                android:padding="9dp"
+                android:scaleType="fitCenter" />
 
-            <Button
-                android:id="@+id/btn_paste"
-                style="@style/TvButton"
-                android:layout_marginStart="16dp"
-                android:text="Paste" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Scan with your phone"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
-            <Button
-                android:id="@+id/btn_clear"
-                style="@style/TvButton"
-                android:layout_marginStart="16dp"
-                android:text="Clear" />
+            <TextView
+                android:id="@+id/phone_hint"
+                android:layout_width="210dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:gravity="center"
+                android:textColor="#2DD4BF"
+                android:textSize="13sp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Right: scan with phone -->
-    <LinearLayout
-        android:id="@+id/qr_box"
+    <!-- Bottom: recently watched -->
+    <TextView
+        android:id="@+id/recent_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="56dp"
-        android:gravity="center_horizontal"
-        android:orientation="vertical">
+        android:layout_marginTop="12dp"
+        android:text="Recently watched"
+        android:textColor="#9AA3AF"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
-        <ImageView
-            android:id="@+id/qr_image"
-            android:layout_width="200dp"
-            android:layout_height="200dp"
-            android:background="#FFFFFF"
-            android:contentDescription="QR code to send a link from your phone"
-            android:padding="10dp"
-            android:scaleType="fitCenter" />
+    <HorizontalScrollView
+        android:id="@+id/recent_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:clipToPadding="false"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:scrollbars="none"
+        android:visibility="gone">
 
-        <TextView
+        <LinearLayout
+            android:id="@+id/recent_row"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:text="Scan with your phone"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/phone_hint"
-            android:layout_width="220dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:gravity="center"
-            android:textColor="#2DD4BF"
-            android:textSize="14sp" />
-    </LinearLayout>
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
 </LinearLayout>

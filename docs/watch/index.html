@@ -44,7 +44,7 @@ form.open input:focus{border-color:var(--teal2);box-shadow:0 0 0 3px rgba(45,212
 .btn:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
 @media(max-width:560px){form.open input{flex-basis:100%}form.open .btn{flex:1}}
 
-.msg{margin-top:12px;border-radius:12px;padding:12px 14px;font-size:14px;display:none}
+.msg{margin-top:12px;border-radius:12px;padding:12px 14px;font-size:14px;display:none;white-space:pre-line;word-break:break-word}
 .msg.on{display:block}
 .msg.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);color:#FCA5A5}
 .msg.info{background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.3);color:#99F6E4}
@@ -246,8 +246,22 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     const why = code === 4
       ? 'This video can\'t be played here. Either the link isn\'t a direct video file, it has expired or needs a login, or this browser doesn\'t support its format (common with MKV / H.265). Try Chrome or Edge, or use the TV app.'
       : 'The video stopped loading. Check your internet connection and that the link still works.';
-    show(why, 'err');
+    const names = { 1: 'MEDIA_ERR_ABORTED', 2: 'MEDIA_ERR_NETWORK', 3: 'MEDIA_ERR_DECODE', 4: 'MEDIA_ERR_SRC_NOT_SUPPORTED' };
+    const detail = (names[code] || 'UNKNOWN') + ' (' + code + ')' +
+      (video.error && video.error.message ? ' — ' + video.error.message : '') +
+      ' · network ' + video.networkState + ' · ready ' + video.readyState;
+    show(why + '\n\nDetails: ' + detail, 'err');
   });
+
+  // If nothing has loaded after 20 s, say so instead of spinning forever.
+  let stallTimer = null;
+  video.addEventListener('loadstart', () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (video.readyState === 0 && !video.error) show('The video hasn\'t started loading after 20 seconds. The link may be slow, blocked, or not a direct video file.\n\nDetails: network ' + video.networkState + ' · ready 0', 'err');
+    }, 20000);
+  });
+  video.addEventListener('loadeddata', () => { clearTimeout(stallTimer); hideMsg(); });
 
   // ---------- subtitles from this device (.srt / .vtt) ----------
   $('subs').addEventListener('change', e => {

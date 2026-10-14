@@ -1,6 +1,5 @@
 package mv.magnettv
 
-import org.libtorrent4j.AlertListener
 import org.libtorrent4j.Priority
 import org.libtorrent4j.SessionHandle
 import org.libtorrent4j.SessionManager
@@ -12,14 +11,9 @@ import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
-import org.libtorrent4j.alerts.AddTorrentAlert
-import org.libtorrent4j.alerts.Alert
-import org.libtorrent4j.alerts.AlertType
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import kotlin.math.min
 
@@ -56,19 +50,8 @@ object TorrentEngine {
     @Volatile var stream: StreamFile? = null
         private set
     @Volatile private var handle: TorrentHandle? = null
-    @Volatile private var addLatch = CountDownLatch(1)
     @Volatile private var generation = 0
     @Volatile private var lastWindowPiece = -1
-
-    private val listener = object : AlertListener {
-        override fun types(): IntArray = intArrayOf(AlertType.ADD_TORRENT.swig())
-        override fun alert(alert: Alert<*>) {
-            if (alert is AddTorrentAlert) {
-                handle = alert.handle()
-                addLatch.countDown()
-            }
-        }
-    }
 
     @Synchronized
     private fun session(): SessionManager {
@@ -89,7 +72,6 @@ object TorrentEngine {
         sp.setBoolean(settings_pack.bool_types.announce_to_all_tiers.swigValue(), true)
 
         val s = SessionManager()
-        s.addListener(listener)
         s.start(SessionParams(sp))
         session = s
         return s
@@ -105,31 +87,31 @@ object TorrentEngine {
         // One torrent from start to finish: add the magnet once and wait for its file list on that
         // same torrent. (Fetching the info separately and re-adding it raced with the removal of the
         // temporary copy and could crash the torrent library.)
-        val hash = magnetHash(magnet)
+        val hash = magnetHash(magnet) ?: throw IOException("That magnet link couldn't be read.")
         waitUntilGone(s, hash)
-        addLatch = CountDownLatch(1)
         handle = null
         s.download(magnet, saveDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
-        if (!addLatch.await(30, TimeUnit.SECONDS)) throw IOException("Torrent failed to start.")
-        val th = handle?.takeIf { it.isValid } ?: throw IOException("Torrent failed to start.")
+        // Look the torrent up by its hash: that gives a handle we own. (A handle taken from an
+        // alert points into memory the library frees shortly after, and then goes invalid.)
+        val th = waitForHandle(s, hash) ?: throw IOException("Torrent failed to start.")
+        handle = th
 
         val started = System.currentTimeMillis()
         while (!th.status().hasMetadata()) {
             if (gen != generation || !th.isValid) throw InterruptedIOException("Cancelled")
             val secs = (System.currentTimeMillis() - started) / 1000
             val peers = th.status().numPeers()
-            val nodes = runCatching { s.dhtNodes() }.getOrDefault(0L)
             if (secs >= FETCH_TIMEOUT_S) {
                 throw IOException(
-                    if (peers == 0 && nodes == 0L)
-                        "Couldn't reach the torrent network. Check the TV's internet connection, or your network may block torrents."
+                    if (peers == 0)
+                        "No peers found. The link may have no one sharing it, or your network may block torrents. Try another link, or test on a phone hotspot."
                     else
-                        "No one is sharing this torrent right now (no peers found). Try another link."
+                        "Connected to $peers peer(s) but couldn't get the torrent info. Try again."
                 )
             }
             onStatus(
                 "Finding peers and fetching torrent info…\n" +
-                    "Peers: $peers   ·   Network nodes: $nodes   ·   ${secs}s of $FETCH_TIMEOUT_S s"
+                    "Peers: $peers   ·   ${secs}s of $FETCH_TIMEOUT_S s"
             )
             Thread.sleep(500)
         }
@@ -212,6 +194,17 @@ object TorrentEngine {
         val p = libtorrent.parse_magnet_uri(uri, ec)
         if (ec.value() != 0) null else Sha1Hash(p.getInfo_hashes().get_best())
     }.getOrNull()
+
+    /** Waits until the session has the torrent, and returns a handle we own. */
+    private fun waitForHandle(s: SessionManager, hash: Sha1Hash): TorrentHandle? {
+        val until = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < until) {
+            val th = runCatching { s.find(hash) }.getOrNull()
+            if (th != null && th.isValid) return th
+            Thread.sleep(100)
+        }
+        return null
+    }
 
     /** A previous stream of the same torrent may still be shutting down; wait for it to go. */
     private fun waitUntilGone(s: SessionManager, hash: Sha1Hash?) {

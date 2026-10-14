@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Magnet Player Web</title>
+<meta name="description" content="Play a video from a direct download link on any device.">
+<meta name="theme-color" content="#0B0D12">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0D12; --panel:#13161D; --panel2:#1A1D24; --line:#262A33;
+  --text:#F3F4F6; --muted:#9AA3AF; --teal:#5EEAD4; --teal2:#2DD4BF;
+  --grad:linear-gradient(120deg,#7C3AED 0%,#DB2777 55%,#F97316 100%);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:var(--teal)}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px}
+button,input{font:inherit}
+
+nav{position:sticky;top:0;z-index:20;background:rgba(11,13,18,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:58px;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;color:var(--text);text-decoration:none;font-size:16px;white-space:nowrap}
+.brand svg{width:30px;height:30px;border-radius:8px}
+.brand small{font-weight:600;color:var(--muted);font-size:13px}
+nav .tv{color:var(--muted);text-decoration:none;font-size:14px;font-weight:600;white-space:nowrap}
+nav .tv:hover{color:var(--text)}
+
+.hero{position:relative;overflow:hidden;padding:34px 0 10px}
+.hero::before{content:"";position:absolute;width:640px;height:640px;left:-260px;top:-380px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.38),transparent 62%);pointer-events:none}
+.hero h1{position:relative;font-size:clamp(26px,5vw,40px);letter-spacing:-1.2px;line-height:1.1;margin:0 0 6px}
+.hero h1 span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{position:relative;color:var(--muted);margin:0 0 20px;font-size:16px}
+
+form.open{position:relative;display:flex;gap:10px;flex-wrap:wrap}
+form.open input{flex:1;min-width:0;background:var(--panel2);border:1px solid #333844;color:var(--text);border-radius:12px;padding:14px 15px;font-size:15px;outline:none}
+form.open input:focus{border-color:var(--teal2);box-shadow:0 0 0 3px rgba(45,212,191,.2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:12px;padding:13px 22px;font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn-main{background:var(--grad);color:#fff;box-shadow:0 8px 24px rgba(219,39,119,.3)}
+.btn-ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+.btn:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+@media(max-width:560px){form.open input{flex-basis:100%}form.open .btn{flex:1}}
+
+.msg{margin-top:12px;border-radius:12px;padding:12px 14px;font-size:14px;display:none}
+.msg.on{display:block}
+.msg.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);color:#FCA5A5}
+.msg.info{background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.3);color:#99F6E4}
+
+/* player */
+#stage{display:none;margin-top:22px}
+#stage.on{display:block}
+.vbox{background:#000;border-radius:14px;overflow:hidden;border:1px solid var(--line);position:relative}
+video{display:block;width:100%;max-height:78vh;background:#000}
+.vbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.vtitle{flex:1;min-width:180px;font-weight:700;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.chip:hover{border-color:#3a3f4b}
+.chip input{display:none}
+
+/* recents */
+h2{font-size:18px;margin:34px 0 12px;display:flex;align-items:center;justify-content:space-between}
+h2 button{background:none;border:0;color:var(--muted);font-size:13px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+@media(max-width:560px){.grid{grid-template-columns:1fr 1fr;gap:10px}.thumb{font-size:22px}.cbody{padding:8px 10px 10px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;position:relative;text-align:left;color:inherit;padding:0}
+.card:hover,.card:focus-visible{border-color:var(--teal2);outline:none}
+.thumb{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:30px;color:rgba(255,255,255,.92);letter-spacing:-1px;position:relative}
+.thumb svg{position:absolute;right:8px;bottom:8px;width:30px;height:30px;opacity:.95}
+.bar{height:3px;background:#333844}
+.bar i{display:block;height:100%;background:var(--teal2)}
+.cbody{padding:10px 12px 12px}
+.cbody b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbody span{color:var(--muted);font-size:12px}
+.del{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:0;color:#fff;font-size:16px;cursor:pointer;opacity:0;transition:opacity .15s}
+.card:hover .del,.card:focus-within .del{opacity:1}
+@media(hover:none){.del{opacity:1}}
+.empty{color:var(--muted);font-size:14px;background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:18px}
+
+.tips{margin:34px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.tip{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.tip b{display:block;margin-bottom:4px}
+.tip p{margin:0;color:var(--muted);font-size:14px}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:22px 0 30px;color:var(--muted);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(16px);background:#fff;color:#111;font-weight:600;font-size:14px;padding:10px 18px;border-radius:30px;opacity:0;transition:.25s;pointer-events:none;z-index:50}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C3AED"/><stop offset=".55" stop-color="#DB2777"/><stop offset="1" stop-color="#F97316"/></linearGradient>
+    <symbol id="logo" viewBox="0 0 100 100">
+      <rect width="100" height="100" rx="22" fill="url(#lg)"/>
+      <path d="M28 20 V56 A22 22 0 0 0 72 56 V20" fill="none" stroke="#fff" stroke-width="15"/>
+      <path d="M28 20 V31 M72 20 V31" stroke="#5EEAD4" stroke-width="15"/>
+      <path d="M43 39 L61 51 L43 63 Z" fill="#fff" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,.45)"/><path d="M10 8l6 4-6 4z" fill="#fff"/></symbol>
+  </defs>
+</svg>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="./"><svg><use href="#logo"/></svg>Magnet Player <small>Web</small></a>
+    <a class="tv" href="../">Get the TV app →</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Play any video link <span>in your browser</span></h1>
+    <p>Paste a direct video link (ending in .mp4, .webm…). Works on phones, laptops and smart-TV browsers.</p>
+    <form class="open" id="open">
+      <input id="url" type="url" inputmode="url" autocomplete="off" placeholder="https://example.com/video.mp4" aria-label="Video link" required>
+      <button class="btn btn-main" type="submit">▶ Play</button>
+      <button class="btn btn-ghost" type="button" id="paste">Paste</button>
+    </form>
+    <div class="msg" id="msg"></div>
+  </section>
+
+  <section id="stage" aria-label="Player">
+    <div class="vbox">
+      <video id="video" controls playsinline preload="metadata"></video>
+    </div>
+    <div class="vbar">
+      <div class="vtitle" id="vtitle"></div>
+      <label class="chip" title="Load a subtitle file from this device">CC Add subtitles<input type="file" id="subs" accept=".srt,.vtt"></label>
+      <button class="chip" type="button" id="share">Copy share link</button>
+      <button class="chip" type="button" id="close">Close</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Recently watched <button type="button" id="clearAll" hidden>Clear all</button></h2>
+    <div class="grid" id="recents"></div>
+  </section>
+
+  <section class="tips">
+    <div class="tip"><b>Which links work?</b><p>Links straight to a video file, starting with https://. Links to a page with a download button won't play.</p></div>
+    <div class="tip"><b>Video won't play?</b><p>MP4 plays everywhere. MKV and H.265 play only in some browsers — try Chrome or Edge, or use the TV app.</p></div>
+    <div class="tip"><b>Magnet links</b><p>Browsers can't use normal torrents. For magnet links, use the <a href="../">Android TV app</a>.</p></div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Magnet Player Web · history is saved only in this browser</span>
+    <span>Only play content you have the right to watch.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const video = $('video'), stage = $('stage'), msg = $('msg'), urlIn = $('url');
+  const KEY = 'mpweb.recents', MAX = 24;
+  let current = null, saveTimer = null;
+
+  // ---------- storage (per browser) ----------
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } }
+  function store(list) { try { localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX))); } catch (e) {} }
+  function upsert(item) { store([item].concat(load().filter(r => r.url !== item.url))); }
+  function find(url) { return load().find(r => r.url === url); }
+  function remove(url) { store(load().filter(r => r.url !== url)); renderRecents(); }
+
+  // ---------- helpers ----------
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 1800); }
+  function show(text, kind) { msg.className = 'msg on ' + kind; msg.textContent = text; }
+  function hideMsg() { msg.className = 'msg'; }
+  function fmt(s) {
+    s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0');
+  }
+  function cleanTitle(raw) {
+    let t = raw.trim().replace(/\.(mp4|mkv|webm|avi|mov|m4v|ts|m3u8|mpg|mpeg|wmv|flv)$/i, '');
+    t = t.replace(/[._]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const cut = t.search(/(\b\d{3,4}p\b|\bweb[ -]?rip\b|\bweb[ -]?dl\b|\bblu[ -]?ray\b|\bbrrip\b|\bhdrip\b|\bdvdrip\b|\bhdtv\b|\bx26[45]\b|\bh ?26[45]\b|\bhevc\b|\b10bit\b|\bddp?\d|\baac\b|\[)/i);
+    if (cut > 1) t = t.slice(0, cut);
+    t = t.trim().replace(/[-( []+$/, '');
+    const y = t.match(/^(.*\S)\s+((?:19|20)\d{2})$/); if (y) t = y[1] + ' (' + y[2] + ')';
+    return t || raw;
+  }
+  function titleFromUrl(u) {
+    try { const n = decodeURIComponent(new URL(u).pathname.split('/').pop() || ''); return n ? cleanTitle(n) : new URL(u).hostname; }
+    catch (e) { return u; }
+  }
+  function hue(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+  function initials(t) { return t.replace(/\(.*?\)/g, '').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '▶'; }
+
+  // ---------- open / play ----------
+  function check(u) {
+    if (/^magnet:/i.test(u)) return 'Magnet links need the Android TV app — browsers can\'t use normal torrents.';
+    let p; try { p = new URL(u); } catch (e) { return 'That doesn\'t look like a web address. Paste a link starting with https://'; }
+    if (p.protocol === 'http:' && location.protocol === 'https:') return 'This link starts with http://, which browsers block on secure pages. Try the same link with https://, or use the TV app.';
+    if (!/^https?:$/.test(p.protocol)) return 'Paste a link starting with https://';
+    return null;
+  }
+
+  function play(u, title) {
+    u = (u || '').trim();
+    const problem = check(u);
+    if (problem) { show(problem, 'err'); return; }
+    hideMsg();
+    const prev = find(u);
+    current = { url: u, title: title || (prev && prev.title) || titleFromUrl(u), pos: prev ? prev.pos : 0, dur: prev ? prev.dur : 0, at: Date.now() };
+    upsert(current);
+    $('vtitle').textContent = current.title;
+    [...video.querySelectorAll('track')].forEach(t => t.remove());
+    video.src = u;
+    stage.classList.add('on');
+    history.replaceState(null, '', '?v=' + encodeURIComponent(u));
+    video.play().catch(() => {}); // autoplay may need a tap on some devices
+    stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderRecents();
+  }
+
+  video.addEventListener('loadedmetadata', () => {
+    if (!current) return;
+    current.dur = video.duration || 0;
+    const nearEnd = current.dur && current.pos > current.dur - Math.min(60, current.dur * 0.05);
+    if (current.pos > 30 && !nearEnd) { video.currentTime = current.pos; toast('Resuming from ' + fmt(current.pos)); }
+    save();
+  });
+  function save() {
+    if (!current || !isFinite(video.currentTime)) return;
+    if (video.currentTime > 0) current.pos = video.currentTime;
+    if (isFinite(video.duration)) current.dur = video.duration;
+    current.at = Date.now();
+    upsert(current);
+  }
+  video.addEventListener('timeupdate', () => { if (!saveTimer) saveTimer = setTimeout(() => { saveTimer = null; save(); }, 4000); });
+  video.addEventListener('pause', () => { save(); renderRecents(); });
+  video.addEventListener('ended', () => { if (current) { current.pos = 0; upsert(current); renderRecents(); } });
+  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+
+  video.addEventListener('error', () => {
+    const code = video.error ? video.error.code : 0;
+    const why = code === 4
+      ? 'This video can\'t be played here. Either the link isn\'t a direct video file, it has expired or needs a login, or this browser doesn\'t support its format (common with MKV / H.265). Try Chrome or Edge, or use the TV app.'
+      : 'The video stopped loading. Check your internet connection and that the link still works.';
+    show(why, 'err');
+  });
+
+  // ---------- subtitles from this device (.srt / .vtt) ----------
+  $('subs').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      let text = String(r.result);
+      if (!/^WEBVTT/.test(text.trim())) text = 'WEBVTT\n\n' + text.replace(/\r/g, '').replace(/(\d\d:\d\d:\d\d),(\d\d\d)/g, '$1.$2');
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/vtt' }));
+      [...video.querySelectorAll('track')].forEach(t => t.remove());
+      const tr = document.createElement('track');
+      tr.kind = 'subtitles'; tr.label = f.name; tr.srclang = 'en'; tr.src = url; tr.default = true;
+      video.appendChild(tr);
+      setTimeout(() => { if (video.textTracks[0]) video.textTracks[0].mode = 'showing'; }, 50);
+      toast('Subtitles added');
+    };
+    r.readAsText(f);
+    e.target.value = '';
+  });
+
+  // ---------- recents ----------
+  function renderRecents() {
+    const box = $('recents'), list = load();
+    $('clearAll').hidden = !list.length;
+    box.innerHTML = '';
+    if (!list.length) { box.innerHTML = '<div class="empty">Videos you play will appear here, so you can carry on where you stopped.</div>'; return; }
+    list.forEach(r => {
+      const card = document.createElement('div');
+      card.className = 'card'; card.tabIndex = 0; card.setAttribute('role', 'button');
+      card.setAttribute('aria-label', 'Play ' + r.title);
+      const h = hue(r.title), pct = r.dur ? Math.min(100, r.pos / r.dur * 100) : 0;
+      card.innerHTML =
+        '<div class="thumb" style="background:linear-gradient(135deg,hsl(' + h + ',62%,34%),hsl(' + ((h + 50) % 360) + ',70%,22%))">' +
+          '<span></span><svg><use href="#play"/></svg></div>' +
+        '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+        '<div class="cbody"><b></b><span></span></div>' +
+        '<button class="del" type="button" aria-label="Remove">×</button>';
+      card.querySelector('.thumb span').textContent = initials(r.title);
+      card.querySelector('.cbody b').textContent = r.title;
+      card.querySelector('.cbody span').textContent = r.dur ? fmt(r.pos) + ' / ' + fmt(r.dur) : 'Not started';
+      card.addEventListener('click', e => { if (e.target.closest('.del')) return; urlIn.value = r.url; play(r.url, r.title); });
+      card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } });
+      card.querySelector('.del').addEventListener('click', e => { e.stopPropagation(); remove(r.url); });
+      box.appendChild(card);
+    });
+  }
+  $('clearAll').addEventListener('click', () => { if (confirm('Clear your recently watched list?')) { store([]); renderRecents(); } });
+
+  // ---------- controls ----------
+  $('open').addEventListener('submit', e => { e.preventDefault(); play(urlIn.value); });
+  $('paste').addEventListener('click', async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) { urlIn.value = t.trim(); play(urlIn.value); } else toast('Clipboard is empty'); }
+    catch (e) { urlIn.focus(); toast('Long-press the box and choose Paste'); }
+  });
+  $('close').addEventListener('click', () => {
+    save(); video.pause(); video.removeAttribute('src'); video.load();
+    stage.classList.remove('on'); current = null; history.replaceState(null, '', location.pathname); renderRecents();
+  });
+  $('share').addEventListener('click', () => {
+    const link = location.origin + location.pathname + '?v=' + encodeURIComponent(current ? current.url : '');
+    const done = () => toast('Share link copied');
+    if (navigator.clipboard) navigator.clipboard.writeText(link).then(done, done); else done();
+  });
+  document.addEventListener('keydown', e => {
+    if (!current || e.target.tagName === 'INPUT') return;
+    if (e.key === ' ' || e.key === 'k') { e.preventDefault(); video.paused ? video.play() : video.pause(); }
+    else if (e.key === 'ArrowRight') video.currentTime += 10;
+    else if (e.key === 'ArrowLeft') video.currentTime -= 10;
+    else if (e.key === 'f') { (video.requestFullscreen || video.webkitEnterFullscreen || function () {}).call(video); }
+  });
+
+  // Open a shared link: ?v=<video url>
+  const shared = new URLSearchParams(location.search).get('v');
+  renderRecents();
+  if (shared) { urlIn.value = shared; play(shared); }
+})();
+</script>
+</body>
+</html>

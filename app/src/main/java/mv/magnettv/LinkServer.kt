@@ -64,7 +64,11 @@ class LinkServer(port: Int, private val onMagnet: (String) -> Unit) : NanoHTTPD(
 private val EXTRA_TRACKERS = listOf(
     "udp://tracker.opentrackr.org:1337/announce",
     "udp://open.demonii.com:1337/announce",
-    "udp://tracker.openbittorrent.com:6969/announce"
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://explodie.org:6969/announce",
+    "udp://tracker.dler.org:6969/announce"
 )
 
 /** Accepts a magnet link or a bare info-hash; adds a few public trackers to help find peers. */

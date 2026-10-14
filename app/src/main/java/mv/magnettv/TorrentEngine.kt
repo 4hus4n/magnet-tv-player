@@ -4,6 +4,9 @@ import org.libtorrent4j.AlertListener
 import org.libtorrent4j.Priority
 import org.libtorrent4j.SessionHandle
 import org.libtorrent4j.SessionManager
+import org.libtorrent4j.SessionParams
+import org.libtorrent4j.SettingsPack
+import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
 import org.libtorrent4j.TorrentInfo
@@ -45,6 +48,7 @@ object TorrentEngine {
     private const val SUB_WAIT_MS = 20_000L
 
     private const val READ_AHEAD_BYTES = 16L * 1024 * 1024
+    private const val FETCH_TIMEOUT_S = 120
 
     private var session: SessionManager? = null
     @Volatile var stream: StreamFile? = null
@@ -67,9 +71,24 @@ object TorrentEngine {
     @Synchronized
     private fun session(): SessionManager {
         session?.let { return it }
+        val sp = SettingsPack()
+        sp.setBoolean(settings_pack.bool_types.enable_dht.swigValue(), true)
+        sp.setBoolean(settings_pack.bool_types.enable_lsd.swigValue(), true)
+        sp.setBoolean(settings_pack.bool_types.enable_upnp.swigValue(), true)
+        sp.setBoolean(settings_pack.bool_types.enable_natpmp.swigValue(), true)
+        sp.setString(
+            settings_pack.string_types.dht_bootstrap_nodes.swigValue(),
+            "dht.libtorrent.org:25401,router.bittorrent.com:6881,dht.transmissionbt.com:6881," +
+                "router.utorrent.com:6881,dht.aelitis.com:6881"
+        )
+        sp.setString(settings_pack.string_types.listen_interfaces.swigValue(), "0.0.0.0:6881,[::]:6881")
+        sp.setInteger(settings_pack.int_types.connections_limit.swigValue(), 200)
+        sp.setBoolean(settings_pack.bool_types.announce_to_all_trackers.swigValue(), true)
+        sp.setBoolean(settings_pack.bool_types.announce_to_all_tiers.swigValue(), true)
+
         val s = SessionManager()
         s.addListener(listener)
-        s.start()
+        s.start(SessionParams(sp))
         session = s
         return s
     }
@@ -81,9 +100,36 @@ object TorrentEngine {
         saveDir.mkdirs()
         val s = session()
 
-        onStatus("Finding peers and fetching torrent info…")
-        val data = s.fetchMagnet(magnet, 90, saveDir)
-            ?: throw IOException("Couldn't get torrent info. No peers found — check the link or try again.")
+        // Live progress while the torrent info is fetched (can take a minute on quiet torrents).
+        val started = System.currentTimeMillis()
+        val fetching = java.util.concurrent.atomic.AtomicBoolean(true)
+        val ticker = Thread {
+            while (fetching.get()) {
+                val secs = (System.currentTimeMillis() - started) / 1000
+                val nodes = runCatching { s.stats().dhtNodes().toLong() }.getOrDefault(0L)
+                onStatus(
+                    "Finding peers and fetching torrent info…\n" +
+                        "Network nodes: $nodes   ·   ${secs}s of $FETCH_TIMEOUT_S s"
+                )
+                try { Thread.sleep(1000) } catch (_: InterruptedException) { break }
+            }
+        }.apply { isDaemon = true; start() }
+
+        val data = try {
+            s.fetchMagnet(magnet, FETCH_TIMEOUT_S, saveDir)
+        } finally {
+            fetching.set(false)
+            ticker.interrupt()
+        }
+        if (data == null) {
+            val nodes = runCatching { s.stats().dhtNodes().toLong() }.getOrDefault(0L)
+            throw IOException(
+                if (nodes == 0L)
+                    "Couldn't reach the torrent network. Check the TV's internet connection, or your network may block torrents."
+                else
+                    "No one is sharing this torrent right now (no peers found). Try another link."
+            )
+        }
         if (gen != generation) throw InterruptedIOException("Cancelled")
 
         val ti = TorrentInfo.bdecode(data)

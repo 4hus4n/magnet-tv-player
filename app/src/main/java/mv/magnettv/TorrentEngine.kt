@@ -4,12 +4,14 @@ import org.libtorrent4j.AlertListener
 import org.libtorrent4j.Priority
 import org.libtorrent4j.SessionHandle
 import org.libtorrent4j.SessionManager
+import org.libtorrent4j.Sha1Hash
 import org.libtorrent4j.SessionParams
 import org.libtorrent4j.SettingsPack
+import org.libtorrent4j.swig.error_code
+import org.libtorrent4j.swig.libtorrent
 import org.libtorrent4j.swig.settings_pack
 import org.libtorrent4j.TorrentFlags
 import org.libtorrent4j.TorrentHandle
-import org.libtorrent4j.TorrentInfo
 import org.libtorrent4j.alerts.AddTorrentAlert
 import org.libtorrent4j.alerts.Alert
 import org.libtorrent4j.alerts.AlertType
@@ -100,39 +102,40 @@ object TorrentEngine {
         saveDir.mkdirs()
         val s = session()
 
-        // Live progress while the torrent info is fetched (can take a minute on quiet torrents).
-        val started = System.currentTimeMillis()
-        val fetching = java.util.concurrent.atomic.AtomicBoolean(true)
-        val ticker = Thread {
-            while (fetching.get()) {
-                val secs = (System.currentTimeMillis() - started) / 1000
-                val nodes = runCatching { s.stats().dhtNodes().toLong() }.getOrDefault(0L)
-                onStatus(
-                    "Finding peers and fetching torrent info…\n" +
-                        "Network nodes: $nodes   ·   ${secs}s of $FETCH_TIMEOUT_S s"
-                )
-                try { Thread.sleep(1000) } catch (_: InterruptedException) { break }
-            }
-        }.apply { isDaemon = true; start() }
+        // One torrent from start to finish: add the magnet once and wait for its file list on that
+        // same torrent. (Fetching the info separately and re-adding it raced with the removal of the
+        // temporary copy and could crash the torrent library.)
+        val hash = magnetHash(magnet)
+        waitUntilGone(s, hash)
+        addLatch = CountDownLatch(1)
+        handle = null
+        s.download(magnet, saveDir, TorrentFlags.SEQUENTIAL_DOWNLOAD)
+        if (!addLatch.await(30, TimeUnit.SECONDS)) throw IOException("Torrent failed to start.")
+        val th = handle?.takeIf { it.isValid } ?: throw IOException("Torrent failed to start.")
 
-        val data = try {
-            s.fetchMagnet(magnet, FETCH_TIMEOUT_S, saveDir)
-        } finally {
-            fetching.set(false)
-            ticker.interrupt()
-        }
-        if (data == null) {
-            val nodes = runCatching { s.stats().dhtNodes().toLong() }.getOrDefault(0L)
-            throw IOException(
-                if (nodes == 0L)
-                    "Couldn't reach the torrent network. Check the TV's internet connection, or your network may block torrents."
-                else
-                    "No one is sharing this torrent right now (no peers found). Try another link."
+        val started = System.currentTimeMillis()
+        while (!th.status().hasMetadata()) {
+            if (gen != generation || !th.isValid) throw InterruptedIOException("Cancelled")
+            val secs = (System.currentTimeMillis() - started) / 1000
+            val peers = th.status().numPeers()
+            val nodes = runCatching { s.dhtNodes() }.getOrDefault(0L)
+            if (secs >= FETCH_TIMEOUT_S) {
+                throw IOException(
+                    if (peers == 0 && nodes == 0L)
+                        "Couldn't reach the torrent network. Check the TV's internet connection, or your network may block torrents."
+                    else
+                        "No one is sharing this torrent right now (no peers found). Try another link."
+                )
+            }
+            onStatus(
+                "Finding peers and fetching torrent info…\n" +
+                    "Peers: $peers   ·   Network nodes: $nodes   ·   ${secs}s of $FETCH_TIMEOUT_S s"
             )
+            Thread.sleep(500)
         }
         if (gen != generation) throw InterruptedIOException("Cancelled")
 
-        val ti = TorrentInfo.bdecode(data)
+        val ti = th.torrentFile() ?: throw IOException("Couldn't read the torrent's file list.")
         val fs = ti.files()
         var best = -1
         var bestSize = 0L
@@ -152,16 +155,6 @@ object TorrentEngine {
         }
 
         onStatus("Starting download: ${fs.fileName(best)}")
-        Thread.sleep(300) // let the metadata-only torrent finish removing
-        addLatch = CountDownLatch(1)
-        handle = null
-        s.download(ti, saveDir)
-        if (!addLatch.await(30, TimeUnit.SECONDS)) throw IOException("Torrent failed to start.")
-        val th = handle ?: throw IOException("Torrent failed to start.")
-        if (gen != generation) {
-            s.remove(th, SessionHandle.DELETE_FILES)
-            throw InterruptedIOException("Cancelled")
-        }
 
         th.prioritizeFiles(Array(fs.numFiles()) {
             if (it == best || it in subIdx) Priority.TOP_PRIORITY else Priority.IGNORE
@@ -211,6 +204,25 @@ object TorrentEngine {
         for (p in max(sf.firstPiece, sf.lastPiece - 1)..sf.lastPiece) th.setPieceDeadline(p, 1500)
 
         return sf
+    }
+
+    /** Info-hash of a magnet link, or null if it can't be parsed. */
+    private fun magnetHash(uri: String): Sha1Hash? = runCatching {
+        val ec = error_code()
+        val p = libtorrent.parse_magnet_uri(uri, ec)
+        if (ec.value() != 0) null else Sha1Hash(p.getInfo_hashes().get_best())
+    }.getOrNull()
+
+    /** A previous stream of the same torrent may still be shutting down; wait for it to go. */
+    private fun waitUntilGone(s: SessionManager, hash: Sha1Hash?) {
+        if (hash == null) return
+        val until = System.currentTimeMillis() + 10_000
+        while (System.currentTimeMillis() < until) {
+            val old = runCatching { s.find(hash) }.getOrNull()
+            if (old == null || !old.isValid) return
+            runCatching { s.remove(old, SessionHandle.DELETE_FILES) }
+            Thread.sleep(200)
+        }
     }
 
     fun pieceAt(sf: StreamFile, pos: Long): Int = ((sf.offsetInTorrent + pos) / sf.pieceLength).toInt()

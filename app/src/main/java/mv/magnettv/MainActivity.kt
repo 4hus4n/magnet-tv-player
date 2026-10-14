@@ -41,6 +41,15 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btn_clear).setOnClickListener { input.setText("") }
         play.requestFocus()
 
+        CrashLog.install(this)
+        CrashLog.consume(this)?.let { report ->
+            AlertDialog.Builder(this)
+                .setTitle("The app closed unexpectedly last time")
+                .setMessage("Please send a photo of this to the developer:\n\n$report")
+                .setPositiveButton("OK", null)
+                .show()
+        }
+
         handleIntent(intent)
     }
 
